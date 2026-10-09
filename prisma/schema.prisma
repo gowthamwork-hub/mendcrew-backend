@@ -1,0 +1,123 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Service {
+  id          String              @id
+  name        String
+  icon        String
+  description String
+  active      Boolean             @default(true)
+  bookings    Booking[]
+  technicians TechnicianService[]
+}
+
+model Booking {
+  id             String         @id @default(uuid())
+  serviceId      String
+  service        Service        @relation(fields: [serviceId], references: [id])
+  customerName   String
+  phone          String
+  address        String
+  description    String
+  preferredDate  DateTime
+  status         BookingStatus  @default(PENDING)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  customerId     String?
+  customer       User?          @relation("CustomerBookings", fields: [customerId], references: [id])
+  technicianId   String?
+  technician     Technician?    @relation(fields: [technicianId], references: [id])
+  serviceArea    String?
+  idempotencyKey String?
+  requestHash    String?
+  history        BookingEvent[]
+
+  @@unique([customerId, idempotencyKey])
+  @@index([customerId, createdAt])
+  @@index([technicianId, status])
+  @@index([status, createdAt])
+  @@index([preferredDate])
+}
+
+enum Role {
+  CUSTOMER
+  ADMIN
+  TECHNICIAN
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  ASSIGNED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  REJECTED
+}
+
+model User {
+  id           String         @id @default(uuid())
+  name         String
+  phone        String?        @unique
+  email        String?        @unique
+  passwordHash String?
+  role         Role           @default(CUSTOMER)
+  active       Boolean        @default(true)
+  createdAt    DateTime       @default(now())
+  sessions     Session[]
+  bookings     Booking[]      @relation("CustomerBookings")
+  technician   Technician?
+  events       BookingEvent[]
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  tokenHash String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model Technician {
+  id           String              @id @default(uuid())
+  userId       String              @unique
+  user         User                @relation(fields: [userId], references: [id])
+  active       Boolean             @default(true)
+  available    Boolean             @default(true)
+  serviceAreas String[]
+  services     TechnicianService[]
+  bookings     Booking[]
+}
+
+model TechnicianService {
+  technicianId String
+  serviceId    String
+  technician   Technician @relation(fields: [technicianId], references: [id], onDelete: Cascade)
+  service      Service    @relation(fields: [serviceId], references: [id])
+
+  @@id([technicianId, serviceId])
+  @@index([serviceId])
+}
+
+model BookingEvent {
+  id         String         @id @default(uuid())
+  bookingId  String
+  booking    Booking        @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  actorId    String
+  actor      User           @relation(fields: [actorId], references: [id])
+  fromStatus BookingStatus?
+  toStatus   BookingStatus
+  createdAt  DateTime       @default(now())
+
+  @@index([bookingId, createdAt])
+}
